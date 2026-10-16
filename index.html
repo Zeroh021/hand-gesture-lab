@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teach the Computer Your Hand</title>
+<style>
+:root{--bg:#071a2e;--panel:#0d2640;--line:#1d4165;--text:#e8f1fa;--mute:#8fb0cc;
+--blue:#1ea7ff;--teal:#17a89b;--purple:#7c5cff;--green:#2ba84a;--orange:#f59e0b;--red:#e84c3d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+header{padding:24px 24px 8px;max-width:1100px;margin:auto}
+h1{margin:0;font-size:clamp(28px,5vw,44px);letter-spacing:-.02em;line-height:1.1}
+header p{color:var(--mute);margin:6px 0 0}
+main{max-width:1100px;margin:auto;padding:16px 24px 48px;display:grid;gap:16px;grid-template-columns:1.2fr 1fr}
+@media(max-width:860px){main{grid-template-columns:1fr}}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+h2{font-size:18px;margin:0 0 4px}
+.sub{color:var(--mute);font-size:14px;margin:0 0 12px}
+.full{grid-column:1/-1}
+#pipe{display:flex;gap:6px;flex-wrap:wrap}
+#pipe div{flex:1;min-width:110px;padding:8px;border:2px solid var(--line);border-radius:8px;text-align:center;font-size:13px;color:var(--mute);transition:.15s}
+#pipe b{display:block;font-size:14px}
+#pipe .on{color:var(--text);background:#0a3050}
+#pipe .on:nth-child(1){border-color:var(--blue)}#pipe .on:nth-child(2){border-color:var(--teal)}
+#pipe .on:nth-child(3){border-color:var(--purple)}#pipe .on:nth-child(4){border-color:var(--green)}
+#pipe .on:nth-child(5){border-color:var(--orange)}
+.cam{position:relative;aspect-ratio:4/3;background:#000;border-radius:8px;overflow:hidden}
+.cam video,.cam canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#msg{position:absolute;inset:auto 0 0 0;padding:8px 12px;background:#000a;font-size:14px}
+button,select{font:inherit;color:var(--text);background:#12395d;border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer}
+button:hover{background:#18507f}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.cls{border:2px solid var(--c);border-radius:8px;padding:10px;margin-bottom:10px}
+.cls .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cls strong{color:var(--c);flex:1;font-size:17px}
+.rec{background:var(--c);border-color:var(--c);color:#fff;font-weight:600;user-select:none;touch-action:none}
+.rec.live{filter:brightness(1.3);box-shadow:0 0 0 3px #fff6}
+.count{font-variant-numeric:tabular-nums;color:var(--mute);font-size:14px}
+.meter{height:8px;background:#0a2036;border-radius:4px;margin-top:8px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--c);transition:width .2s}
+.bar{display:grid;grid-template-columns:100px 1fr 48px;gap:8px;align-items:center;margin:6px 0;font-size:14px}
+.bar div{height:14px;background:#0a2036;border-radius:7px;overflow:hidden}.bar i{display:block;height:100%;background:var(--c);width:0;transition:width .12s}
+#big{font-size:clamp(26px,4vw,38px);font-weight:700;margin:10px 0 2px}
+#rule{font-family:Consolas,monospace;color:var(--purple);background:#120f2e;border-radius:6px;padding:6px 10px;display:inline-block}
+.warn{color:var(--red);font-weight:600;font-size:14px;margin-top:8px}
+.ok{background:#0d2a1c;border-left:4px solid var(--green);padding:8px 12px;border-radius:4px;font-size:14px}
+ul.chk{list-style:none;padding:0;margin:0;display:grid;gap:6px}
+ul.chk label{display:flex;gap:8px;align-items:flex-start;font-size:15px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+<h1>Teach the Computer Your Hand</h1>
+<p>Design a gesture model, train it with your own examples, then test it and connect it to actions. No code needed.</p>
+</header>
+
+<main>
+<section class="full">
+<h2>The pipeline</h2>
+<p class="sub">Each stage lights up when it is working. When something fails, find the stage that is responsible.</p>
+<div id="pipe">
+<div id="p1"><b>1. Input</b>Camera frame</div>
+<div id="p2"><b>2. Features</b>Hand landmarks</div>
+<div id="p3"><b>3. Model</b>Gesture classifier</div>
+<div id="p4"><b>4. Prediction</b><span id="pPred">none yet</span></div>
+<div id="p5"><b>5. Action</b><span id="pAct">none yet</span></div>
+</div>
+</section>
+
+<section>
+<h2>Camera</h2>
+<p class="sub">Keep one hand in view. The blue dots are the 21 landmarks the model uses.</p>
+<div class="cam"><video id="vid" playsinline muted></video><canvas id="cv"></canvas><div id="msg">Press Start camera.</div></div>
+<div class="tools"><button id="start">Start camera</button></div>
+</section>
+
+<section>
+<h2>Step 1 and 2: Create classes and collect data</h2>
+<p class="sub">Hold a Record button while you move your hand slightly. Vary angle, distance, position and lighting. Target: 40 to 60 examples per class.</p>
+<div id="classes"></div>
+<div class="tools">
+<button id="add4">Add 4th class: Thumbs up</button>
+<button id="save">Save model</button>
+<button id="clear">Delete all data</button>
+</div>
+<p class="sub" id="dataTip" style="margin-top:8px"></p>
+</section>
+
+<section>
+<h2>Step 3 and 4: Test the prediction</h2>
+<p class="sub">The model is trained as soon as it has examples. It compares each new hand with what it learned.</p>
+<div id="bars"></div>
+<div class="warn">91% confidence is not 100% certainty.</div>
+<p class="sub" style="margin-top:10px">Minimum confidence to trigger an action: <b id="thv">70</b>%</p>
+<input id="th" type="range" min="40" max="99" value="70" style="width:100%">
+</section>
+
+<section>
+<h2>Step 5: From prediction to action</h2>
+<p class="sub">The model predicts. Your IF / THEN rules decide what happens.</p>
+<div id="maps"></div>
+<div id="big">Waiting</div>
+<div id="rule">IF gesture = ? THEN ?</div>
+<p class="sub" style="margin-top:8px">Mode: <b id="mode">Normal</b> · Confirmed: <b id="conf">0</b> · Moving: <b id="mv">no</b></p>
+</section>
+
+<section class="full">
+<h2>Can you break your model?</h2>
+<p class="sub">Try each one. Find at least one failure, then add better examples for it and retrain (just record more).</p>
+<div class="ok" style="margin-bottom:10px">Test, find failure, add better data, retrain, test again. Improvement should show up as fewer errors or steadier predictions.</div>
+<ul class="chk" id="break"></ul>
+<h2 style="margin-top:16px">Success check</h2>
+<ul class="chk" id="success"></ul>
+<p class="warn">A working model with no explanation is not enough. Be ready to explain how information moves through the system.</p>
+</section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+<script>
+const $=id=>document.getElementById(id);
+const ACTIONS=["Start / Move","Stop","Change mode","Confirm","Do nothing"];
+const CLASSES=[
+ {name:"Open palm",c:"#1ea7ff",act:"Start / Move"},
+ {name:"Fist",c:"#e84c3d",act:"Stop"},
+ {name:"Peace",c:"#7c5cff",act:"Change mode"},
+ {name:"Thumbs up",c:"#2ba84a",act:"Confirm"}];
+let active=3, data=[[],[],[],[]], recording=-1, lastRec=0, features=null, running=false;
+const TARGET=60, K=7;
+
+// ---------- Features: 21 landmarks -> 42 numbers (relative to wrist, scaled) ----------
+function toFeatures(lm){
+  const w=lm[0]; let m=0;
+  const pts=lm.map(p=>{const x=p.x-w.x,y=p.y-w.y;m=Math.max(m,Math.hypot(x,y));return[x,y]});
+  return pts.flatMap(p=>[p[0]/m,p[1]/m]);
+}
+// ---------- Model: k-nearest-neighbours, learns from your examples ----------
+function predict(f){
+  const all=[];
+  data.slice(0,active).forEach((arr,ci)=>arr.forEach(s=>{
+    let d=0;for(let i=0;i<42;i++){const e=s[i]-f[i];d+=e*e}
+    all.push([Math.sqrt(d),ci]);
+  }));
+  if(!all.length)return null;
+  all.sort((a,b)=>a[0]-b[0]);
+  const score=Array(active).fill(0);let tot=0;
+  all.slice(0,K).forEach(([d,ci])=>{const w=1/(d+.05);score[ci]+=w;tot+=w});
+  return score.map(s=>s/tot);
+}
+
+// ---------- UI ----------
+function buildClasses(){
+  $("classes").innerHTML="";$("maps").innerHTML="";$("bars").innerHTML="";
+  for(let i=0;i<active;i++){
+    const k=CLASSES[i];
+    const d=document.createElement("div");d.className="cls";d.style.setProperty("--c",k.c);
+    d.innerHTML=`<div class="row"><strong>${k.name}</strong><span class="count" id="n${i}">0 / ${TARGET}</span>
+    <button class="rec" data-i="${i}">Hold to record</button></div><div class="meter" style="--c:${k.c}"><i id="m${i}"></i></div>`;
+    $("classes").append(d);
+    const r=document.createElement("div");r.className="bar";r.style.setProperty("--c",k.c);
+    r.innerHTML=`<span>${k.name}</span><div><i id="b${i}"></i></div><span id="v${i}">0%</span>`;$("bars").append(r);
+    const m=document.createElement("div");m.className="bar";m.style.gridTemplateColumns="100px 1fr";
+    m.innerHTML=`<span style="color:${k.c}">${k.name}</span><select data-i="${i}">${ACTIONS.map(a=>`<option${a===k.act?" selected":""}>${a}</option>`).join("")}</select>`;
+    $("maps").append(m);
+  }
+  document.querySelectorAll(".rec").forEach(b=>{
+    const i=+b.dataset.i;
+    const on=e=>{e.preventDefault();recording=i;b.classList.add("live")};
+    const off=()=>{recording=-1;b.classList.remove("live")};
+    b.addEventListener("pointerdown",on);["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,off));
+    b.addEventListener("keydown",e=>{if(e.key===" "||e.key==="Enter")on(e)});
+    b.addEventListener("keyup",off);
+  });
+  document.querySelectorAll("#maps select").forEach(s=>s.onchange=()=>CLASSES[+s.dataset.i].act=s.value);
+  updateCounts();
+}
+function updateCounts(){
+  let min=1e9,max=0;
+  for(let i=0;i<active;i++){
+    const n=data[i].length;min=Math.min(min,n);max=Math.max(max,n);
+    $("n"+i).textContent=n+" / "+TARGET;$("m"+i).style.width=Math.min(100,n/TARGET*100)+"%";
+  }
+  $("dataTip").textContent=max===0?"No data yet. Record some examples of each class.":
+    (max>0&&min<max*0.6?"Unbalanced: record more of your smallest class. Good data has a balanced number of samples.":
+    min<40?"Keep going: aim for 40 to 60 examples per class, with different angles and distances.":"Nice. Now test it in new conditions below.");
+}
+function checklist(id,items){
+  $(id).innerHTML=items.map(t=>`<li><label><input type="checkbox"> ${t}</label></li>`).join("");
+}
+checklist("break",["Turn: rotate your hand","Move: go farther away","Light: change the lighting","Background: move to another location","Speed: move your hand quickly"]);
+checklist("success",["I can explain the computer vision pipeline.","I can explain what a training class is.","I collected varied data for each gesture.","I tested the model in different conditions.","I found at least one failure and improved it.","I connected a prediction to an app action."]);
+
+$("add4").onclick=()=>{if(active<4){active=4;$("add4").disabled=true;buildClasses()}};
+$("th").oninput=()=>$("thv").textContent=$("th").value;
+$("clear").onclick=()=>{if(confirm("Delete all training data?")){data=[[],[],[],[]];updateCounts()}};
+$("save").onclick=()=>{try{localStorage.setItem("handlab",JSON.stringify({active,data}));alert("Model saved in this browser.")}catch(e){alert("Could not save here.")}};
+try{const s=JSON.parse(localStorage.getItem("handlab")||"null");if(s){active=s.active;data=s.data;if(active===4)$("add4").disabled=true}}catch(e){}
+buildClasses();
+
+// ---------- Action logic (the "block logic") ----------
+let mode=0,confirmed=0,moving=false,lastGesture=null,stable=0,hist=[];
+const MODES=["Normal","Fast","Precise"];
+function applyAction(i){
+  const a=CLASSES[i].act,g=CLASSES[i].name;
+  $("rule").textContent=`IF gesture = ${g.toUpperCase()} THEN ${a.toUpperCase()}`;
+  $("big").textContent=a;$("pAct").textContent=a;
+  if(a==="Start / Move")moving=true;
+  if(a==="Stop")moving=false;
+  // one-shot actions fire only when the gesture changes
+  if(lastGesture!==i){
+    if(a==="Change mode")mode=(mode+1)%MODES.length;
+    if(a==="Confirm")confirmed++;
+  }
+  $("mode").textContent=MODES[mode];$("conf").textContent=confirmed;$("mv").textContent=moving?"yes":"no";
+  lastGesture=i;
+}
+
+// ---------- Camera + MediaPipe ----------
+const vid=$("vid"),cv=$("cv"),ctx=cv.getContext("2d");
+const CONN=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const hands=new Hands({locateFile:f=>"https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/"+f});
+hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.6,minTrackingConfidence:.5});
+hands.onResults(r=>{
+  cv.width=r.image.width;cv.height=r.image.height;ctx.clearRect(0,0,cv.width,cv.height);
+  $("p1").classList.add("on");
+  const lm=r.multiHandLandmarks&&r.multiHandLandmarks[0];
+  ["p2","p3","p4","p5"].forEach(id=>$(id).classList.toggle("on",!!lm));
+  if(!lm){features=null;$("msg").textContent="No hand found. Show one hand, well lit.";$("pPred").textContent="none";hist=[];return}
+  $("msg").textContent=recording>=0?"Recording "+CLASSES[recording].name+"...":"Hand found.";
+  ctx.lineWidth=3;ctx.strokeStyle="#35d0ff";
+  CONN.forEach(([a,b])=>{ctx.beginPath();ctx.moveTo(lm[a].x*cv.width,lm[a].y*cv.height);ctx.lineTo(lm[b].x*cv.width,lm[b].y*cv.height);ctx.stroke()});
+  ctx.fillStyle="#fff";ctx.strokeStyle="#1ea7ff";
+  lm.forEach(p=>{ctx.beginPath();ctx.arc(p.x*cv.width,p.y*cv.height,5,0,7);ctx.fill();ctx.stroke()});
+  features=toFeatures(lm);
+  const now=performance.now();
+  if(recording>=0&&now-lastRec>90){lastRec=now;data[recording].push(features);updateCounts()}
+  const p=predict(features);
+  if(!p){$("pPred").textContent="no data";return}
+  p.forEach((v,i)=>{$("b"+i).style.width=v*100+"%";$("v"+i).textContent=Math.round(v*100)+"%"});
+  let best=p.indexOf(Math.max(...p));
+  hist.push(best);if(hist.length>5)hist.shift();
+  const vote=hist.filter(h=>h===best).length;      // smooth: needs 3 of last 5 frames
+  const th=$("th").value/100;
+  $("pPred").textContent=CLASSES[best].name+" "+Math.round(p[best]*100)+"%";
+  if(recording<0){
+    if(p[best]>=th&&vote>=3)applyAction(best);
+    else{$("big").textContent="Not sure";$("rule").textContent="IF confidence < "+$("th").value+"% THEN DO NOTHING";lastGesture=null}
+  }
+});
+async function loop(){
+  if(vid.readyState>=2){try{await hands.send({image:vid})}catch(e){}}
+  requestAnimationFrame(loop);
+}
+$("start").onclick=async()=>{
+  if(running)return;
+  try{
+    $("msg").textContent="Loading hand model...";
+    vid.srcObject=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:"user"}});
+    await vid.play();running=true;$("start").textContent="Camera on";loop();
+  }catch(e){$("msg").textContent="Camera blocked. Allow camera access and use https or localhost."}
+};
+</script>
+</body>
+</html>
